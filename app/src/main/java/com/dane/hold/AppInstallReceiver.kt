@@ -16,7 +16,8 @@ class AppInstallReceiver : BroadcastReceiver() {
             if (shouldLockNewApps) {
                 val newPackageName = intent.data?.schemeSpecificPart
                 if (newPackageName != null) {
-                    LockedAppManager.addLockedApp(context, newPackageName)
+                    val defaultDuration = prefs.getInt(SettingsActivity.KEY_HOLD_DURATION, 5)
+                    LockedAppManager.setLockedAppDuration(context, newPackageName, defaultDuration)
                 }
             }
         }

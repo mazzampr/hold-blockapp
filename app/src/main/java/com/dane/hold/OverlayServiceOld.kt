@@ -1,6 +1,5 @@
 package com.dane.hold
 
-import android.animation.Animator
 import android.annotation.SuppressLint
 import android.app.Service
 import android.content.Context
@@ -9,31 +8,25 @@ import android.graphics.PixelFormat
 import android.os.Build
 import android.os.CountDownTimer
 import android.os.IBinder
-import android.os.VibrationEffect
-import android.os.Vibrator
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
-import android.view.ViewAnimationUtils
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.ProgressBar
 import android.widget.TextView
-import com.dane.hold.data.LockedAppManager
-import kotlin.math.hypot
 
-class OverlayService: Service() {
+class OverlayServiceOld: Service() {
     private lateinit var windowManager: WindowManager
     private lateinit var overlayView: View
     private var countDownTimer: CountDownTimer? = null
     private var currentPackageName: String? = null
     private var unlockSuccessful = false
 
-    private var revealAnimator: Animator? = null
-    private lateinit var vibrator: Vibrator
-
-    override fun onBind(intent: Intent?): IBinder? = null
+    override fun onBind(intent: Intent?): IBinder? {
+        return null
+    }
 
     @SuppressLint("ClickableViewAccessibility", "SetTextI18n")
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -41,7 +34,6 @@ class OverlayService: Service() {
         currentPackageName = intent?.getStringExtra("PACKAGE_NAME")
 
         overlayView = LayoutInflater.from(this).inflate(R.layout.overlay_layout, null)
-        vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
 
         val layoutFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -49,33 +41,53 @@ class OverlayService: Service() {
             WindowManager.LayoutParams.TYPE_PHONE
         }
 
-        val params = WindowManager.LayoutParams(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT, layoutFlag, 0, PixelFormat.TRANSLUCENT)
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            layoutFlag,
+            0,
+            PixelFormat.TRANSLUCENT
+        )
+
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         windowManager.addView(overlayView, params)
 
-        setupUI()
+        overlayView.systemUiVisibility = (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_FULLSCREEN)
+
+        overlayView.isFocusableInTouchMode = true
+        overlayView.requestFocus()
+        overlayView.setOnKeyListener { _, keyCode, _ ->
+            keyCode == KeyEvent.KEYCODE_BACK
+        }
+        overlayView.setOnKeyListener { _, keyCode, _ ->
+            keyCode == KeyEvent.KEYCODE_HOME
+        }
+        overlayView.setOnKeyListener { _, keyCode, _ ->
+            keyCode == KeyEvent.KEYCODE_MENU
+        }
 
         val titleText: TextView = overlayView.findViewById(R.id.text_overlay_title)
-        val holdButton: Button = overlayView.findViewById(R.id.button_hold)
-        val revealView: View = overlayView.findViewById(R.id.reveal_view)
         val countdownText: TextView = overlayView.findViewById(R.id.text_countdown)
         val progressBar: ProgressBar = overlayView.findViewById(R.id.progress_bar_countdown)
+        val holdButton: Button = overlayView.findViewById(R.id.button_hold)
         val btnExit: Button = overlayView.findViewById(R.id.btn_exit)
+
         val dailyGoalText: TextView = overlayView.findViewById(R.id.text_daily_goal)
 
         val prefs = getSharedPreferences(SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE)
-        var holdDurationSeconds = LockedAppManager.getLockedAppDuration(this, currentPackageName ?: "")
+        val holdDurationSeconds = prefs.getInt(SettingsActivity.KEY_HOLD_DURATION, 5)
 
-        // Jika tidak ada durasi kustom (-1), ambil durasi default dari pengaturan.
-        if (holdDurationSeconds == -1) {
-            holdDurationSeconds = prefs.getInt(SettingsActivity.KEY_HOLD_DURATION, 5)
-        }
+        val dailyGoalMinutes = prefs.getInt(SettingsActivity.KEY_DAILY_GOAL, 10) // Default 10 min
+        dailyGoalText.text = "Daily Goal: $dailyGoalMinutes min"
 
         val holdDurationMillis = holdDurationSeconds * 1000L
-        val dailyGoalMinutes = prefs.getInt(SettingsActivity.KEY_DAILY_GOAL, 10)
 
         titleText.text = "Hold for $holdDurationSeconds seconds to unlock $appName"
-        dailyGoalText.text = "Daily Goal: $dailyGoalMinutes min"
         countdownText.text = holdDurationSeconds.toString()
         progressBar.max = holdDurationSeconds * 100
         progressBar.progress = progressBar.max
@@ -83,12 +95,10 @@ class OverlayService: Service() {
         holdButton.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    startRevealAnimation(holdButton, revealView, countdownText, holdDurationMillis)
                     startCountdown(holdDurationMillis, countdownText, progressBar)
                     true
                 }
                 MotionEvent.ACTION_UP -> {
-                    cancelRevealAnimation(holdButton, revealView, countdownText)
                     cancelCountdown(holdDurationSeconds, countdownText, progressBar)
                     true
                 }
@@ -106,45 +116,8 @@ class OverlayService: Service() {
             stopSelf()
         }
 
+
         return START_STICKY
-    }
-
-    private fun startRevealAnimation(button: Button, revealView: View, countdownText: TextView, duration: Long) {
-        vibrate(50)
-
-        button.text = ""
-        countdownText.visibility = View.VISIBLE
-
-        val cx = (button.x + button.width / 2).toInt()
-        val cy = (button.y + button.height / 2).toInt()
-        val finalRadius = hypot(overlayView.width.toDouble(), overlayView.height.toDouble()).toFloat()
-
-        revealAnimator = ViewAnimationUtils.createCircularReveal(revealView, cx, cy, -5f, finalRadius).apply {
-            this.duration = duration
-            addListener(object : Animator.AnimatorListener {
-                override fun onAnimationStart(animation: Animator) {
-                    revealView.visibility = View.VISIBLE
-                }
-                override fun onAnimationEnd(animation: Animator) {
-                    vibrate(150)
-//                    unlockSuccessful = true
-//                    stopSelf()
-                }
-                override fun onAnimationCancel(animation: Animator) {
-                    revealView.visibility = View.INVISIBLE
-                    button.text = "HOLD"
-                    cancelCountdown((duration / 1000).toInt(), countdownText, overlayView.findViewById(R.id.progress_bar_countdown))
-                }
-                override fun onAnimationRepeat(animation: Animator) {}
-            })
-        }
-        revealAnimator?.start()
-    }
-
-    private fun cancelRevealAnimation(button: Button, revealView: View, countdownText: TextView) {
-        button.text = "HOLD"
-        revealAnimator?.cancel()
-        revealView.visibility = View.INVISIBLE
     }
 
     private fun startCountdown(duration: Long, text: TextView, progress: ProgressBar) {
@@ -171,36 +144,14 @@ class OverlayService: Service() {
         progress.progress = progress.max
     }
 
-    @Suppress("DEPRECATION")
-    private fun vibrate(duration: Long) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE))
-        } else {
-            vibrator.vibrate(duration)
-        }
-    }
-
-    private fun setupUI() {
-        overlayView.systemUiVisibility = (View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                or View.SYSTEM_UI_FLAG_FULLSCREEN)
-
-        overlayView.isFocusableInTouchMode = true
-        overlayView.requestFocus()
-        overlayView.setOnKeyListener { _, keyCode, _ -> keyCode == KeyEvent.KEYCODE_BACK }
-    }
-
     override fun onDestroy() {
         super.onDestroy()
         if (::overlayView.isInitialized) {
             windowManager.removeView(overlayView)
         }
-        revealAnimator?.cancel()
         countDownTimer?.cancel()
         AppLockerService.isOverlayShowing = false
+
         if (unlockSuccessful) {
             AppLockerService.lastUnlockedAppPackage = currentPackageName
         }

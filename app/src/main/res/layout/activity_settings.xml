@@ -5,6 +5,7 @@
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/blue_light"
     tools:context=".SettingsActivity">
 
     <com.google.android.material.appbar.AppBarLayout
@@ -22,9 +23,9 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             app:title="Settings"
-            app:titleTextColor="#333333"
+            app:titleTextColor="@color/black"
             app:navigationIcon="@drawable/ic_back"
-            app:navigationIconTint="#333333" />
+            app:navigationIconTint="@color/black" />
 
     </com.google.android.material.appbar.AppBarLayout>
 

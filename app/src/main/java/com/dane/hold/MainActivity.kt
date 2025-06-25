@@ -1,19 +1,19 @@
 package com.dane.hold
 
-import android.app.AppOpsManager
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 import android.text.Editable
+import android.text.InputType
 import android.text.TextUtils
 import android.text.TextWatcher
 import android.widget.EditText
-import androidx.activity.enableEdgeToEdge
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -35,17 +35,26 @@ class MainActivity : AppCompatActivity() {
         _binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+
         // Initialize RecyclerView
         recyclerView = findViewById(R.id.recycler_view_apps)
         recyclerView.layoutManager = LinearLayoutManager(this)
 
-        // Get the list of installed apps and set up the adapter
-        val installedApps = getInstalledApps()
-        appAdapter = ListAppAdapter(installedApps, this::checkPermissionsAndToggle)
+        appAdapter = ListAppAdapter(mutableListOf(), this::checkPermissionsAndToggle, this::showSetDurationDialog)
         recyclerView.adapter = appAdapter
+
+        // Get the list of installed apps and set up the adapter
+        loadAndSortApps()
 
         binding.btnSettings.setOnClickListener {
             navigateToSettings()
+        }
+
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
+            insets
         }
 
         searchEditText = findViewById(R.id.edit_text_search)
@@ -63,54 +72,102 @@ class MainActivity : AppCompatActivity() {
                 // Nothing to do here
             }
         })
+
     }
 
     override fun onResume() {
         super.onResume()
         // Refresh the adapter's UI when returning to this screen
-        if (::appAdapter.isInitialized) {
-            appAdapter.notifyDataSetChanged()
-        }
+        loadAndSortApps()
     }
 
-    private fun getInstalledApps(): List<AppData> {
+    private fun loadAndSortApps() {
         val appList = mutableListOf<AppData>()
         val pm = packageManager
-        val packages = pm.getInstalledApplications(PackageManager.GET_META_DATA)
-
+        val packages = pm.getInstalledApplications(0)
         for (appInfo in packages) {
-            // Filter out system apps and only get apps that can be launched
-            if (pm.getLaunchIntentForPackage(appInfo.packageName) != null) {
+            // --- UPDATE: Check if the app is NOT our own app ---
+            if (pm.getLaunchIntentForPackage(appInfo.packageName) != null && appInfo.packageName != this.packageName) {
                 val appName = pm.getApplicationLabel(appInfo).toString()
                 val appIcon = pm.getApplicationIcon(appInfo)
                 val packageName = appInfo.packageName
                 appList.add(AppData(appName, appIcon, packageName))
             }
         }
-
-        // Sort the list alphabetically by app name for better UX
-        appList.sortBy { it.name.lowercase() }
-
-        return appList
+        val sortedList = appList.sortedWith(
+            compareBy<AppData> { !LockedAppManager.isAppLocked(this, it.packageName) }
+                .thenBy { it.name.lowercase() }
+        )
+        appAdapter.updateFullList(sortedList)
     }
+
+//    private fun getInstalledApps(): List<AppData> {
+//        val appList = mutableListOf<AppData>()
+//        val pm = packageManager
+//        val packages = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+//
+//        for (appInfo in packages) {
+//            // Filter out system apps and only get apps that can be launched
+//            if (pm.getLaunchIntentForPackage(appInfo.packageName) != null) {
+//                val appName = pm.getApplicationLabel(appInfo).toString()
+//                val appIcon = pm.getApplicationIcon(appInfo)
+//                val packageName = appInfo.packageName
+//                appList.add(AppData(appName, appIcon, packageName))
+//            }
+//        }
+//
+//        // Sort the list alphabetically by app name for better UX
+//        appList.sortBy { it.name.lowercase() }
+//
+//        return appList
+//    }
 
     private fun checkPermissionsAndToggle(packageName: String, isChecked: Boolean, callback: (success: Boolean) -> Unit) {
         if (isChecked) {
-            // User wants to LOCK an app
             if (areAllPermissionsGranted()) {
-                // All permissions are granted, proceed to lock
-                LockedAppManager.addLockedApp(this, packageName)
-                callback(true) // Signal success to the adapter
+                val prefs = getSharedPreferences(SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE)
+                val defaultDuration = prefs.getInt(SettingsActivity.KEY_HOLD_DURATION, 5)
+                LockedAppManager.setLockedAppDuration(this, packageName, defaultDuration)
+                loadAndSortApps()
+                callback(true)
             } else {
-                // One or more permissions are missing, show the permissions screen
                 startActivity(Intent(this, PermissionActivity::class.java))
-                callback(false) // Signal failure, the adapter will reset the toggle
+                callback(false)
             }
         } else {
-            // User wants to UNLOCK an app, no permission needed for this
             LockedAppManager.removeLockedApp(this, packageName)
-            callback(true) // Unlocking always succeeds
+            loadAndSortApps()
+            callback(true)
         }
+    }
+
+    /**
+     * Fungsi BARU untuk menampilkan dialog pengaturan durasi kustom.
+     */
+    private fun showSetDurationDialog(packageName: String, currentDuration: Int) {
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("Set Custom Duration")
+        builder.setMessage("Enter new hold duration in seconds for this app.")
+
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER
+            setText(currentDuration.toString())
+        }
+        builder.setView(input)
+
+        builder.setPositiveButton("Save") { dialog, _ ->
+            val valueString = input.text.toString()
+            if (valueString.isNotEmpty()) {
+                val newDuration = valueString.toInt()
+                LockedAppManager.setLockedAppDuration(this, packageName, newDuration)
+                loadAndSortApps() // Muat ulang daftar untuk menampilkan nilai baru
+            }
+            dialog.dismiss()
+        }
+        builder.setNegativeButton("Cancel") { dialog, _ ->
+            dialog.cancel()
+        }
+        builder.show()
     }
 
     private fun areAllPermissionsGranted(): Boolean {

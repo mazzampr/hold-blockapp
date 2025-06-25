@@ -32,13 +32,13 @@ class AppLockerService: AccessibilityService() {
         if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             val packageName = event.packageName?.toString() ?: return
 
-            if (packageName != lastUnlockedAppPackage && !isLauncher(packageName)) {
-                lastUnlockedAppPackage = null
-            }
-
-//            if (isLauncher(packageName)) {
+//            if (packageName != lastUnlockedAppPackage && !isLauncher(packageName)) {
 //                lastUnlockedAppPackage = null
 //            }
+
+            if (isLauncher(packageName)) {
+                lastUnlockedAppPackage = null
+            }
 
             val prefs = getSharedPreferences(SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE)
             val isOverlayEnabled = prefs.getBoolean(SettingsActivity.KEY_OVERLAY, true)

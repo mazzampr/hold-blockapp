@@ -1,6 +1,5 @@
 package com.dane.hold
 
-import android.app.AppOpsManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -9,12 +8,9 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 import android.text.TextUtils
-import androidx.activity.enableEdgeToEdge
+import android.widget.ImageView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.card.MaterialCardView
-import androidx.core.net.toUri
 
 class PermissionActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -25,6 +21,7 @@ class PermissionActivity : AppCompatActivity() {
         val backgroundCard: MaterialCardView = findViewById(R.id.card_background_permission)
         val overlayCard: MaterialCardView = findViewById(R.id.card_overlay_permission)
         val accessibilityCard: MaterialCardView = findViewById(R.id.card_accessibility_permission)
+        val btnClose: ImageView = findViewById(R.id.btn_close)
 
         backgroundCard.setOnClickListener {
             requestIgnoreBatteryOptimizations()
@@ -34,6 +31,9 @@ class PermissionActivity : AppCompatActivity() {
         }
         accessibilityCard.setOnClickListener {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+        btnClose.setOnClickListener {
+            finish()
         }
     }
 

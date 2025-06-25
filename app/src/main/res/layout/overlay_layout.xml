@@ -4,7 +4,15 @@
     android:layout_height="match_parent"
     xmlns:tools="http://schemas.android.com/tools"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:background="#63ADF2">
+    android:background="@color/colorPrimary">
+
+    <View
+        android:id="@+id/reveal_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#80FFFFFF"
+        android:visibility="invisible"
+        tools:visibility="visible"/>
 
     <TextView
         android:id="@+id/text_overlay_title"

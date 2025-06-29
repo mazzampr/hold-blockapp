@@ -177,7 +177,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Newly Installed App"
+                android:text="Add Newly Installed App"
                 android:textColor="#333333"
                 android:textSize="16sp"
                 app:layout_constraintStart_toStartOf="parent"

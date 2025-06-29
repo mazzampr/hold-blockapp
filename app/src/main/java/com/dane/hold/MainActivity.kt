@@ -30,6 +30,8 @@ class MainActivity : AppCompatActivity() {
     private var _binding: ActivityMainBinding? = null
     private val binding get() = _binding!!
 
+    private var fullAppList = mutableListOf<AppData>()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         _binding = ActivityMainBinding.inflate(layoutInflater)
@@ -45,7 +47,7 @@ class MainActivity : AppCompatActivity() {
         recyclerView.adapter = appAdapter
 
         // Get the list of installed apps and set up the adapter
-        loadAndSortApps()
+        loadInitialApps()
 
         binding.btnSettings.setOnClickListener {
             navigateToSettings()
@@ -78,15 +80,14 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         // Refresh the adapter's UI when returning to this screen
-        loadAndSortApps()
+        sortAndRefreshList()
     }
 
-    private fun loadAndSortApps() {
+    private fun loadInitialApps() {
         val appList = mutableListOf<AppData>()
         val pm = packageManager
         val packages = pm.getInstalledApplications(0)
         for (appInfo in packages) {
-            // --- UPDATE: Check if the app is NOT our own app ---
             if (pm.getLaunchIntentForPackage(appInfo.packageName) != null && appInfo.packageName != this.packageName) {
                 val appName = pm.getApplicationLabel(appInfo).toString()
                 val appIcon = pm.getApplicationIcon(appInfo)
@@ -94,7 +95,15 @@ class MainActivity : AppCompatActivity() {
                 appList.add(AppData(appName, appIcon, packageName))
             }
         }
-        val sortedList = appList.sortedWith(
+        // Simpan ke variabel utama
+        fullAppList.clear()
+        fullAppList.addAll(appList)
+        // Lakukan pengurutan pertama kali
+        sortAndRefreshList()
+    }
+
+    private fun sortAndRefreshList() {
+        val sortedList = fullAppList.sortedWith(
             compareBy<AppData> { !LockedAppManager.isAppLocked(this, it.packageName) }
                 .thenBy { it.name.lowercase() }
         )
@@ -128,7 +137,7 @@ class MainActivity : AppCompatActivity() {
                 val prefs = getSharedPreferences(SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE)
                 val defaultDuration = prefs.getInt(SettingsActivity.KEY_HOLD_DURATION, 5)
                 LockedAppManager.setLockedAppDuration(this, packageName, defaultDuration)
-                loadAndSortApps()
+                sortAndRefreshList()
                 callback(true)
             } else {
                 startActivity(Intent(this, PermissionActivity::class.java))
@@ -136,7 +145,7 @@ class MainActivity : AppCompatActivity() {
             }
         } else {
             LockedAppManager.removeLockedApp(this, packageName)
-            loadAndSortApps()
+            sortAndRefreshList()
             callback(true)
         }
     }
@@ -160,7 +169,7 @@ class MainActivity : AppCompatActivity() {
             if (valueString.isNotEmpty()) {
                 val newDuration = valueString.toInt()
                 LockedAppManager.setLockedAppDuration(this, packageName, newDuration)
-                loadAndSortApps() // Muat ulang daftar untuk menampilkan nilai baru
+                sortAndRefreshList() // Muat ulang daftar untuk menampilkan nilai baru
             }
             dialog.dismiss()
         }

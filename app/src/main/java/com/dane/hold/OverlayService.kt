@@ -1,6 +1,5 @@
 package com.dane.hold
 
-import android.animation.Animator
 import android.annotation.SuppressLint
 import android.app.Service
 import android.content.Context
@@ -15,23 +14,20 @@ import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
-import android.view.ViewAnimationUtils
 import android.view.WindowManager
+import android.view.animation.AccelerateInterpolator
+import android.view.animation.LinearInterpolator
 import android.widget.Button
-import android.widget.ProgressBar
 import android.widget.TextView
 import com.dane.hold.data.LockedAppManager
-import kotlin.math.hypot
 
 class OverlayService: Service() {
     private lateinit var windowManager: WindowManager
     private lateinit var overlayView: View
-    private var countDownTimer: CountDownTimer? = null
     private var currentPackageName: String? = null
     private var unlockSuccessful = false
-
-    private var revealAnimator: Animator? = null
     private lateinit var vibrator: Vibrator
+    private var countDownTimer: CountDownTimer? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -57,9 +53,7 @@ class OverlayService: Service() {
 
         val titleText: TextView = overlayView.findViewById(R.id.text_overlay_title)
         val holdButton: Button = overlayView.findViewById(R.id.button_hold)
-        val revealView: View = overlayView.findViewById(R.id.reveal_view)
         val countdownText: TextView = overlayView.findViewById(R.id.text_countdown)
-        val progressBar: ProgressBar = overlayView.findViewById(R.id.progress_bar_countdown)
         val btnExit: Button = overlayView.findViewById(R.id.btn_exit)
         val dailyGoalText: TextView = overlayView.findViewById(R.id.text_daily_goal)
 
@@ -77,19 +71,16 @@ class OverlayService: Service() {
         titleText.text = "Hold for $holdDurationSeconds seconds to unlock $appName"
         dailyGoalText.text = "Daily Goal: $dailyGoalMinutes min"
         countdownText.text = holdDurationSeconds.toString()
-        progressBar.max = holdDurationSeconds * 100
-        progressBar.progress = progressBar.max
 
         holdButton.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    startRevealAnimation(holdButton, revealView, countdownText, holdDurationMillis)
-                    startCountdown(holdDurationMillis, countdownText, progressBar)
+                    startScalingAnimation(holdButton, countdownText, holdDurationMillis)
                     true
                 }
                 MotionEvent.ACTION_UP -> {
-                    cancelRevealAnimation(holdButton, revealView, countdownText)
-                    cancelCountdown(holdDurationSeconds, countdownText, progressBar)
+                    cancelScalingAnimation(holdButton, countdownText)
+                    countdownText.text = holdDurationSeconds.toString()
                     true
                 }
                 else -> false
@@ -109,66 +100,45 @@ class OverlayService: Service() {
         return START_STICKY
     }
 
-    private fun startRevealAnimation(button: Button, revealView: View, countdownText: TextView, duration: Long) {
+    private fun startScalingAnimation(button: Button, countdownText: TextView, duration: Long) {
         vibrate(50)
-
         button.text = ""
         countdownText.visibility = View.VISIBLE
 
-        val cx = (button.x + button.width / 2).toInt()
-        val cy = (button.y + button.height / 2).toInt()
-        val finalRadius = hypot(overlayView.width.toDouble(), overlayView.height.toDouble()).toFloat()
-
-        revealAnimator = ViewAnimationUtils.createCircularReveal(revealView, cx, cy, -5f, finalRadius).apply {
-            this.duration = duration
-            addListener(object : Animator.AnimatorListener {
-                override fun onAnimationStart(animation: Animator) {
-                    revealView.visibility = View.VISIBLE
-                }
-                override fun onAnimationEnd(animation: Animator) {
-                    vibrate(150)
-//                    unlockSuccessful = true
-//                    stopSelf()
-                }
-                override fun onAnimationCancel(animation: Animator) {
-                    revealView.visibility = View.INVISIBLE
-                    button.text = "HOLD"
-                    cancelCountdown((duration / 1000).toInt(), countdownText, overlayView.findViewById(R.id.progress_bar_countdown))
-                }
-                override fun onAnimationRepeat(animation: Animator) {}
-            })
-        }
-        revealAnimator?.start()
-    }
-
-    private fun cancelRevealAnimation(button: Button, revealView: View, countdownText: TextView) {
-        button.text = "HOLD"
-        revealAnimator?.cancel()
-        revealView.visibility = View.INVISIBLE
-    }
-
-    private fun startCountdown(duration: Long, text: TextView, progress: ProgressBar) {
-        countDownTimer?.cancel()
-        countDownTimer = object : CountDownTimer(duration, 10) {
+        countDownTimer = object : CountDownTimer(duration, 16) { // Update ~60fps
             override fun onTick(millisUntilFinished: Long) {
+                // 1. Update Teks Countdown
                 val secondsLeft = (millisUntilFinished / 1000) + 1
-                text.text = secondsLeft.toString()
-                progress.progress = (millisUntilFinished / 10).toInt()
+                countdownText.text = secondsLeft.toString()
+
+                // 2. Hitung Progres (0.0 -> 1.0)
+                val progress = (duration - millisUntilFinished).toFloat() / duration.toFloat()
+
+                // 3. Hitung skala target (dari 1x menjadi 2x ukuran)
+                val currentScale = 1.0f + progress // 1.0f adalah ukuran asli, 1.0f + 1.0f = 2.0f
+
+                // 4. Terapkan skala ke tombol secara manual
+                button.scaleX = currentScale
+                button.scaleY = currentScale
             }
 
             override fun onFinish() {
+                vibrate(150)
                 unlockSuccessful = true
-                text.text = "0"
-                progress.progress = 0
                 stopSelf()
             }
         }.start()
     }
 
-    private fun cancelCountdown(durationSeconds: Int, text: TextView, progress: ProgressBar) {
+    private fun cancelScalingAnimation(button: Button, countdownText: TextView) {
+        // Hentikan animasi dan timer
+        button.animate().cancel()
         countDownTimer?.cancel()
-        text.text = durationSeconds.toString()
-        progress.progress = progress.max
+
+        // Kembalikan tombol ke keadaan semula
+        button.scaleX = 1.0f
+        button.scaleY = 1.0f
+        button.text = "HOLD"
     }
 
     @Suppress("DEPRECATION")
@@ -187,7 +157,6 @@ class OverlayService: Service() {
                 or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                 or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                 or View.SYSTEM_UI_FLAG_FULLSCREEN)
-
         overlayView.isFocusableInTouchMode = true
         overlayView.requestFocus()
         overlayView.setOnKeyListener { _, keyCode, _ -> keyCode == KeyEvent.KEYCODE_BACK }
@@ -198,7 +167,6 @@ class OverlayService: Service() {
         if (::overlayView.isInitialized) {
             windowManager.removeView(overlayView)
         }
-        revealAnimator?.cancel()
         countDownTimer?.cancel()
         AppLockerService.isOverlayShowing = false
         if (unlockSuccessful) {

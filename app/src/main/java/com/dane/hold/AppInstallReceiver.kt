@@ -13,8 +13,11 @@ class AppInstallReceiver : BroadcastReceiver() {
             val prefs = context.getSharedPreferences(SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE)
             val shouldLockNewApps = prefs.getBoolean(SettingsActivity.KEY_NEWLY_INSTALLED, true)
 
-            if (shouldLockNewApps) {
+            val isReplacing = intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)
+
+            if (shouldLockNewApps && !isReplacing) {
                 val newPackageName = intent.data?.schemeSpecificPart
+
                 if (newPackageName != null) {
                     val defaultDuration = prefs.getInt(SettingsActivity.KEY_HOLD_DURATION, 5)
                     LockedAppManager.setLockedAppDuration(context, newPackageName, defaultDuration)

@@ -7,7 +7,9 @@ import android.content.Intent
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.CountDownTimer
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.view.KeyEvent
@@ -105,10 +107,11 @@ class OverlayService: Service() {
         button.text = ""
         countdownText.visibility = View.VISIBLE
 
+
         countDownTimer = object : CountDownTimer(duration, 16) { // Update ~60fps
             override fun onTick(millisUntilFinished: Long) {
                 // 1. Update Teks Countdown
-                val secondsLeft = (millisUntilFinished / 1000) + 1
+                val secondsLeft = Math.ceil(millisUntilFinished / 1000.0).toInt() - 1
                 countdownText.text = secondsLeft.toString()
 
                 // 2. Hitung Progres (0.0 -> 1.0)
@@ -123,9 +126,14 @@ class OverlayService: Service() {
             }
 
             override fun onFinish() {
+                countdownText.text = "0"
                 vibrate(150)
                 unlockSuccessful = true
-                stopSelf()
+
+                // Add a short delay so the user can see the "0" before the overlay disappears
+                Handler(Looper.getMainLooper()).postDelayed({
+                    stopSelf()
+                }, 200)
             }
         }.start()
     }

@@ -1,6 +1,7 @@
 package com.dane.hold
 
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.text.InputType
@@ -23,6 +24,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var overlaySwitch: SwitchMaterial
     private lateinit var newlyInstalledSwitch: SwitchMaterial
     private lateinit var toolbar: MaterialToolbar
+    private lateinit var managePermissionsText: TextView
 
     private lateinit var sharedPreferences: SharedPreferences
 
@@ -53,14 +55,10 @@ class SettingsActivity : AppCompatActivity() {
         dailyGoalValueText = findViewById(R.id.text_view_daily_goal_value)
         overlaySwitch = findViewById(R.id.switch_overlay)
         newlyInstalledSwitch = findViewById(R.id.switch_newly_installed)
+        managePermissionsText = findViewById(R.id.text_manage_permissions)
 
-        // Setup the toolbar for navigation
         setupToolbar()
-
-        // Load any saved settings into the UI
         loadSettings()
-
-        // Setup listeners for user interactions
         setupClickListeners()
     }
 
@@ -107,7 +105,9 @@ class SettingsActivity : AppCompatActivity() {
             )
         }
 
-
+        managePermissionsText.setOnClickListener {
+            startActivity(Intent(this, PermissionActivity::class.java))
+        }
 
         overlaySwitch.setOnCheckedChangeListener { _, isChecked ->
             saveBooleanSetting(KEY_OVERLAY, isChecked)

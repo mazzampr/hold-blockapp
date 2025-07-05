@@ -9,6 +9,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.text.TextUtils
 import android.widget.ImageView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.card.MaterialCardView
 
@@ -24,14 +25,29 @@ class PermissionActivity : AppCompatActivity() {
         val btnClose: ImageView = findViewById(R.id.btn_close)
 
         backgroundCard.setOnClickListener {
-            requestIgnoreBatteryOptimizations()
+            if (isIgnoringBatteryOptimizations()) {
+                Toast.makeText(this, "Permission already granted", Toast.LENGTH_SHORT).show()
+            } else {
+                requestIgnoreBatteryOptimizations()
+            }
         }
+
         overlayCard.setOnClickListener {
-            requestOverlayPermission()
+            if (hasOverlayPermission()) {
+                Toast.makeText(this, "Permission already granted", Toast.LENGTH_SHORT).show()
+            } else {
+                requestOverlayPermission()
+            }
         }
+
         accessibilityCard.setOnClickListener {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            if (isAccessibilityServiceEnabled()) {
+                Toast.makeText(this, "Permission already granted", Toast.LENGTH_SHORT).show()
+            } else {
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
         }
+
         btnClose.setOnClickListener {
             finish()
         }
